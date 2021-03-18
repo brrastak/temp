@@ -10,116 +10,83 @@
 #include "main.h"
 #include "init.h"
 #include "gpio.h"
-#include "timer.h"
-#include "display.h"
-#include "UART.h"
-#include "SPI.h"
-#include "MCP4921.h"
-#include "encoder.h"
-#include "button.h"
 
-// Onboard LED
-void LEDOn(void);
-void LEDOff(void);
-void LEDBlink(void);
 
-bool keyboard_enable = false;
+// I2C flags -> GPIO
+void ShowFlags(void);
+
+uint8_t addr = 0xAF;
+uint8_t data[20] = {0xA0};
 
 
 int main()
 {    
     // System init
-    InitRCC();
-    InitGPIO();
-    InitSysTick();
-    //InitUART();
-    InitSPI();
-    InitTIM2();
-    InitInterrupt();
-    
-    //delay_ms(200);
-    InitDisp(); 
-    
-    // Hardware init
-    LEDOff();  
-    
-    
-    // Software init    
-    char buf[16];
-    pattern = 1;
-    volume = ValueEncoder();
-    
-    btn_t    butn = {BUTN0_PIN, 0, 20, false, false, false},
-            relay = {BUTN1_PIN, 0,  1, false, false, false};
-    
-    // Timings
-    uint32_t ButnCheckCounter   = sys_tick;
-    uint32_t DispCounter        = sys_tick;
-    const int DispTime = 200;        // ms
-    const int DispClrScrTime = 2;   // ms
-    bool to_clear = false;
-    
-    while (true) {
-        
-        if (SPItransmitted())
-            ChipDeselectSPI();
-        
-        if ((sys_tick - DispCounter > DispTime)&& !to_clear) {
-            DispCounter = sys_tick;
-            
-            sprintf(buf, " Pattern: %u", pattern);
-            WriteLine(buf);
+    InitRcc();
+    InitGpio();
 
-            //WriteLine("Hello! =)");
-            
-            MoveToLine2();
-            sprintf(buf, "  Volume: %u", volume);
-            WriteLine(buf);
-            
-            to_clear = true;
-        }
-        if ((sys_tick - DispCounter > DispTime - DispClrScrTime)&& to_clear) {
-            ClrScr();
-            to_clear = false;
-        }
+    
+    // Init I2C
+    // Transmitter in master mode
+    I2C1->CR2 = 36;                     // RCC 36MHz
+    I2C1->CCR |= 180;                   // 100kHz
+    I2C1->TRISE = 0x55;                 // 1000ns
+    I2C1->CR1 |= I2C_CR1_PE;            // peripheral enable
+    
+    ShowFlags();
+    
+    // Generate start condition
+    I2C1->CR1 |= I2C_CR1_START;
+    while ((I2C1->SR1 | I2C_SR1_ADDR) == 0) {
         
-        if (sys_tick - ButnCheckCounter > 1) {
-            ButnCheckCounter = sys_tick;
-            
-            GetEncoder();
-            volume = ValueEncoder();
-            
-            BtnCheck(&butn);
-            BtnCheck(&relay);
-        }
-        
-        if (butn.was_pressed) {
-            butn.was_pressed = false;
-            pattern++;
-            if (pattern > 8)
-                pattern = 1;
-        }
-        
-        if (butn.is_pressed) {
-            LEDOn();
-        }
-        else {
-            LEDOff();
-        }
+        ShowFlags();
     }
+    
+    ShowFlags();
+    
+    // Send addr
+    (void)I2C1->SR1;                // clear flags
+    I2C1->DR = addr;                // send I2C address
+    while ((I2C1->SR1 | I2C_SR1_ADDR) == 0) {
+        
+        ShowFlags();
+    }
+    
+    ShowFlags();
+    
+    // Send data
+    (void)I2C1->SR1;                // clear flags
+    (void)I2C1->SR2;
+    I2C1->DR = data[0];
+    while ((I2C1->SR1 | I2C_SR1_TXE) == 0) {
+        
+        ShowFlags();
+    }
+    
+    ShowFlags();
+    
+    // End of transmission
+    
+    
+    while (true)
+        ;
+    
+}
+
+// I2C flags -> GPIO
+void ShowFlags(void)
+{
+    // TxE
+    if ((I2C1->SR1 | I2C_SR1_TXE) != 0)
+        SetPin(TXE_PIN);
+    else
+        ResetPin(TXE_PIN);
+    // BTF
+    if ((I2C1->SR1 | I2C_SR1_BTF) != 0)
+        SetPin(BTF_PIN);
+    else
+        ResetPin(BTF_PIN);
 }
 
 
-// Onboard LED
-void LEDOn(void)
-{
-    PinReset(LED_PIN);
-}
-void LEDOff(void)
-{
-    PinSet(LED_PIN);
-}
-void LEDBlink(void)
-{
-    PinSwitch(LED_PIN);
-}
+
