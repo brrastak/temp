@@ -5,6 +5,8 @@
 #include "init.h"
 #include "main.h"
 #include "gpio.h"
+#include "debug_led.h"
+
 
 void InitRcc(void)
 {
@@ -36,5 +38,7 @@ void InitGpio(void)
     // Flags indication
     SetGpioMode(TXE_PIN, PIN_MODE_2MHZ_OPP);
     SetGpioMode(BTF_PIN, PIN_MODE_2MHZ_OPP);
+    // Debug LED
+    SetGpioMode(LED_PIN, PIN_MODE_2MHZ_OPP);
 
 }
