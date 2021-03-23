@@ -16,8 +16,9 @@
 // I2C flags -> GPIO
 void ShowFlags(void);
 
-uint8_t addr = 0xAF;
-uint8_t data[20] = {0xA0};
+
+uint8_t addr = (0x3C << 1);     // SSD1306
+uint8_t data[20];
 
 
 int main()
@@ -27,6 +28,8 @@ int main()
     InitGpio();
 
     TurnLedOff();
+    
+    
     
     // Init I2C
     // Transmitter in master mode
@@ -41,10 +44,10 @@ int main()
     I2C2->CR1 |= I2C_CR1_START;
     while ((I2C2->SR1 & I2C_SR1_SB) == 0) {
         
-        //ShowFlags();
+        ShowFlags();
     }
     
-    //ShowFlags();
+    ShowFlags();
     
     
     // Send addr
@@ -61,20 +64,29 @@ int main()
     // Send data
     (void)I2C2->SR1;                // clear flags
     (void)I2C2->SR2;
-    I2C2->DR = data[0];
-    while ((I2C2->SR1 & I2C_SR1_TXE) == 0) {
+    
+    for (int i = 0; i < 5; i++) {
+    
+        I2C2->DR = i+'a';
+        while ((I2C2->SR1 & I2C_SR1_TXE) == 0) {
         
-        ShowFlags();
+            ShowFlags();
+        }
     }
     
     ShowFlags();
-    //TurnLedOn();
+    
+    while ((I2C2->SR1 & I2C_SR1_BTF) == 0) {
+        
+        ShowFlags();
+    }
+    ShowFlags();
     
     // End of transmission
-    
+    I2C2->CR1 |= I2C_CR1_STOP;  // generate stop condition
     
     while (true)
-        ;
+        ShowFlags();
     
 }
 
@@ -82,12 +94,12 @@ int main()
 void ShowFlags(void)
 {
     // TxE
-    if ((I2C2->SR1 | I2C_SR1_TXE) != 0)
+    if ((I2C2->SR1 & I2C_SR1_TXE) != 0)
         SetPin(TXE_PIN);
     else
         ResetPin(TXE_PIN);
     // BTF
-    if ((I2C2->SR1 | I2C_SR1_BTF) != 0)
+    if ((I2C2->SR1 & I2C_SR1_BTF) != 0)
         SetPin(BTF_PIN);
     else
         ResetPin(BTF_PIN);
